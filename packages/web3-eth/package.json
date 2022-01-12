@@ -18,7 +18,7 @@
         "web3-core-helpers": "1.5.2",
         "web3-core-method": "1.5.2",
         "web3-core-subscriptions": "1.5.2",
-        "web3-eth-abi": "1.5.2",
+        "web3-eth-abi": "1.6.1",
         "web3-eth-accounts": "1.5.2",
         "web3-eth-contract": "1.5.2",
         "web3-eth-ens": "1.5.2",

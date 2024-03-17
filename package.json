@@ -107,7 +107,7 @@
         "bn.js": "^5.2.1",
         "browserify": "^16.5.2",
         "buffer": "^4.9.2",
-        "bundlesize": "^0.18.0",
+        "bundlesize": "^0.18.2",
         "chai": "^4.2.0",
         "chai-as-promised": "^7.1.1",
         "clean-webpack-plugin": "^3.0.0",

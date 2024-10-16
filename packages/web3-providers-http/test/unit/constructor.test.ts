@@ -1,44 +1,60 @@
-import Web3ProvidersHttp from '../../src/index';
+﻿/*
+This file is part of web3.js.
 
-describe('constructs a Web3ProvidersHttp instance with expected properties', () => {
-    let web3ProvidersHttpRequestSpy: jest.SpyInstance;
+web3.js is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-    beforeAll(() => {
-        const chainIdResult = {
-            id: 42,
-            jsonrpc: '2.0',
-            result: '0x1',
-        };
+web3.js is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
 
-        Web3ProvidersHttp.prototype.request = jest.fn();
-        web3ProvidersHttpRequestSpy = jest.spyOn(
-            Web3ProvidersHttp.prototype,
-            'request'
-        );
-        // Web3ProviderHttp makes a request to get chainId of
-        // connected client upon instantiation, so we mock the reponse
-        // @ts-ignore mockReturnValueOnce added by jest
-        Web3ProvidersHttp.prototype.request.mockReturnValue(chainIdResult);
-    });
+You should have received a copy of the GNU Lesser General Public License
+along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
-    it('should instantiate with expected properties', () => {
-        const expectedClient = 'http://127.0.0.1:8545';
-        const web3ProvidersHttp = new Web3ProvidersHttp(expectedClient);
-        expect(web3ProvidersHttp.web3Client).toBe(expectedClient);
-    });
+import HttpProvider from '../../src/index';
+import { httpProviderOptions, validClients, invalidClients } from '../fixtures/test_data';
 
-    it('should fail to instantiate with invalid client error', () => {
-        expect(() => {
-            // @ts-ignore - Ignore invalid type
-            new Web3ProvidersHttp({});
-        }).toThrowError(
-            'Failed to create HTTP client: Invalid HTTP(S) URL provided'
-        );
-    });
+describe('HttpProvider', () => {
+	it('should construct with expected methods', () => {
+		const httpProvider = new HttpProvider('http://localhost:8545');
 
-    it('should return false when calling supportsSubscriptions', () => {
-        const expectedClient = 'http://127.0.0.1:8545';
-        const web3ProvidersHttp = new Web3ProvidersHttp(expectedClient);
-        expect(web3ProvidersHttp.supportsSubscriptions()).toBeFalsy();
-    });
+		expect(httpProvider.request).toBeDefined();
+		expect(httpProvider.getStatus).toBeDefined();
+		expect(httpProvider.supportsSubscriptions).toBeDefined();
+		expect(httpProvider.request).toBeDefined();
+		expect(httpProvider.on).toBeDefined();
+		expect(httpProvider.removeListener).toBeDefined();
+		expect(httpProvider.once).toBeDefined();
+		expect(httpProvider.removeAllListeners).toBeDefined();
+		expect(httpProvider.connect).toBeDefined();
+		expect(httpProvider.disconnect).toBeDefined();
+		expect(httpProvider.reset).toBeDefined();
+		expect(httpProvider.reconnect).toBeDefined();
+	});
+
+	it('Allows for providerOptions to be passed upon instantiation', () => {
+		expect(() => new HttpProvider('http://localhost:8545', httpProviderOptions)).not.toThrow();
+	});
+
+	for (const validClient of validClients) {
+		it(`Instantiation with valid client - ${validClient}`, () => {
+			expect(() => new HttpProvider(validClient)).not.toThrow();
+		});
+	}
+
+	for (const invalidClient of invalidClients) {
+		/* eslint-disable @typescript-eslint/restrict-template-expressions */
+		it(`Instantiation with invalid client - ${invalidClient}`, () => {
+			expect(
+				() =>
+					// @ts-expect-error - Purposefully passing invalid types to check validation
+					new HttpProvider(invalidClient),
+				/* eslint-disable @typescript-eslint/restrict-template-expressions */
+			).toThrow(`Client URL "${invalidClient}" is invalid.`);
+		});
+	}
 });

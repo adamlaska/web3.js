@@ -1,182 +1,130 @@
-import axios, { AxiosInstance } from 'axios';
-import { EventEmitter } from 'events';
+﻿/*
+This file is part of web3.js.
+
+web3.js is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+web3.js is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import fetch from 'cross-fetch';
 import {
-    IWeb3Provider,
-    RpcResponse,
-    RequestArguments,
-    Web3ProviderEvents,
-    ProviderEventListener,
-    Web3Client,
-} from 'web3-core-types/lib/types';
+	EthExecutionAPI,
+	JsonRpcResponseWithResult,
+	Web3APIMethod,
+	Web3APIPayload,
+	Web3APIReturnType,
+	Web3APISpec,
+	Web3BaseProvider,
+	Web3ProviderStatus,
+} from 'web3-types';
+import { InvalidClientError, MethodNotImplementedError, ResponseError } from 'web3-errors';
+import { HttpProviderOptions } from './types.js';
 
-export default class Web3ProvidersHttp
-    extends EventEmitter
-    implements IWeb3Provider
-{
-    private _httpClient: AxiosInstance;
-    private _clientChainId: string | undefined;
-    private _connected = false;
+export { HttpProviderOptions } from './types.js';
 
-    web3Client: string;
+export default class HttpProvider<
+	API extends Web3APISpec = EthExecutionAPI,
+> extends Web3BaseProvider<API> {
+	private readonly clientUrl: string;
+	private readonly httpProviderOptions: HttpProviderOptions | undefined;
 
-    constructor(web3Client: string) {
-        super();
-        this._httpClient = Web3ProvidersHttp._createHttpClient(web3Client);
-        this.web3Client = web3Client;
-        this._connectToClient();
-    }
+	public constructor(clientUrl: string, httpProviderOptions?: HttpProviderOptions) {
+		super();
+		if (!HttpProvider.validateClientUrl(clientUrl)) throw new InvalidClientError(clientUrl);
+		this.clientUrl = clientUrl;
+		this.httpProviderOptions = httpProviderOptions;
+	}
 
-    /**
-     * Determines whether {web3Client} is a valid HTTP client URL
-     *
-     * @param web3Client To be validated
-     * @returns true if valid
-     */
-    private static _validateClientUrl(web3Client: Web3Client): boolean {
-        try {
-            return typeof web3Client === 'string'
-                ? /^http(s)?:\/\//i.test(web3Client)
-                : false;
-        } catch (error) {
-            throw Error(`Failed to validate client url: ${error.message}`);
-        }
-    }
+	private static validateClientUrl(clientUrl: string): boolean {
+		return typeof clientUrl === 'string' ? /^http(s)?:\/\//i.test(clientUrl) : false;
+	}
 
-    /**
-     * Creates axios instance from {web3Client} URL
-     *
-     * @param web3Client Client URL to send requests to
-     * @returns AxiosInstance
-     */
-    private static _createHttpClient(web3Client: Web3Client): AxiosInstance {
-        try {
-            if (!Web3ProvidersHttp._validateClientUrl(web3Client))
-                throw Error('Invalid HTTP(S) URL provided');
-            return axios.create({ baseURL: web3Client as string });
-        } catch (error) {
-            throw Error(`Failed to create HTTP client: ${error.message}`);
-        }
-    }
+	/* eslint-disable class-methods-use-this */
+	public getStatus(): Web3ProviderStatus {
+		throw new MethodNotImplementedError();
+	}
 
-    /**
-     * Checks if connection to client is possible by requesting
-     * client's chainId
-     */
-    private async _connectToClient() {
-        try {
-            const chainId = await this._getChainId();
-            this.emit(Web3ProviderEvents.Connect, { chainId });
-            this._connected = true;
+	/* eslint-disable class-methods-use-this */
+	public supportsSubscriptions() {
+		return false;
+	}
 
-            // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1193.md#chainchanged-1
-            if (
-                this._clientChainId !== undefined &&
-                chainId !== this._clientChainId
-            ) {
-                this.emit(Web3ProviderEvents.ChainChanged, chainId);
-            }
-            this._clientChainId = chainId;
-        } catch (error) {
-            throw Error(
-                `Error connecting to client: ${error.message}\n${error.stack}`
-            );
-        }
-    }
+	public async request<
+		Method extends Web3APIMethod<API>,
+		ResultType = Web3APIReturnType<API, Method>,
+	>(
+		payload: Web3APIPayload<API, Method>,
+		requestOptions?: RequestInit,
+	): Promise<JsonRpcResponseWithResult<ResultType>> {
+		const providerOptionsCombined = {
+			...this.httpProviderOptions?.providerOptions,
+			...requestOptions,
+		};
+		const response = await fetch(this.clientUrl, {
+			...providerOptionsCombined,
+			method: 'POST',
+			headers: {
+				...providerOptionsCombined.headers,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(payload),
+		});
+		if (!response.ok) {
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+			throw new ResponseError(await response.json(), undefined, undefined, response.status);
+		}
 
-    /**
-     * Makes chainId RPC request
-     *
-     * @returns ChainId string
-     */
-    private async _getChainId(): Promise<string> {
-        try {
-            const result = await this.request({
-                method: 'eth_chainId',
-                params: [],
-            });
-            return result.result;
-        } catch (error) {
-            throw Error(`Error getting chain id: ${error.message}`);
-        }
-    }
+		return (await response.json()) as JsonRpcResponseWithResult<ResultType>;
+	}
 
-    /**
-     * Validates and initializes provider using {web3Client}
-     *
-     * @param web3Client New client to set for provider instance
-     */
-    setWeb3Client(web3Client: Web3Client) {
-        try {
-            this._httpClient = Web3ProvidersHttp._createHttpClient(web3Client);
-            this.web3Client = web3Client as string;
-            this._connectToClient();
-        } catch (error) {
-            throw Error(`Failed to set web3 client: ${error.message}`);
-        }
-    }
+	/* eslint-disable class-methods-use-this */
+	public on() {
+		throw new MethodNotImplementedError();
+	}
 
-    /**
-     * Wrapper for EventEmitter's .on
-     *
-     * @param web3ProviderEvents Any valid EIP-1193 provider event
-     * @param listener Function to be called when event is emitted
-     * @returns
-     */
-    on(
-        web3ProviderEvent: Web3ProviderEvents,
-        listener: ProviderEventListener
-    ): this {
-        return super.on(web3ProviderEvent, listener);
-    }
+	/* eslint-disable class-methods-use-this */
+	public removeListener() {
+		throw new MethodNotImplementedError();
+	}
 
-    /**
-     * Shows that this package does not support subscriptions
-     *
-     * @returns false
-     */
-    supportsSubscriptions() {
-        return false;
-    }
+	/* eslint-disable class-methods-use-this */
+	public once() {
+		throw new MethodNotImplementedError();
+	}
 
-    /**
-     * Makes an Axios POST request using provided {args}
-     *
-     * @param args RPC options, request params, AxiosConfig
-     * @returns
-     */
-    async request(args: RequestArguments): Promise<RpcResponse> {
-        try {
-            if (this._httpClient === undefined)
-                throw Error('No HTTP client initiliazed');
-            const arrayParams =
-                args.params === undefined || Array.isArray(args.params)
-                    ? args.params || []
-                    : Object.values(args.params);
-            const response = await this._httpClient.post(
-                '', // URL path
-                {
-                    ...args.rpcOptions,
-                    method: args.method,
-                    params: arrayParams,
-                },
-                args.providerOptions?.axiosConfig || {}
-            );
+	/* eslint-disable class-methods-use-this */
+	public removeAllListeners() {
+		throw new MethodNotImplementedError();
+	}
 
-            // If the above call was successful, then we're connected
-            // to the client, and should emit accordingly (EIP-1193)
-            // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1193.md#connect-1
-            if (this._connected === false) this._connectToClient();
+	/* eslint-disable class-methods-use-this */
+	public connect() {
+		throw new MethodNotImplementedError();
+	}
 
-            return response.data.data ? response.data.data : response.data;
-        } catch (error) {
-            if (error.code === 'ECONNREFUSED' && this._connected) {
-                this._connected = false;
-                // TODO replace with ProviderRpcError
-                this.emit(Web3ProviderEvents.Disconnect, { code: 4900 });
-            }
-            // TODO Fancy error detection that complies with EIP1193 defined errors
-            // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1193.md#provider-errors
-            throw Error(error.message);
-        }
-    }
+	/* eslint-disable class-methods-use-this */
+	public disconnect() {
+		throw new MethodNotImplementedError();
+	}
+
+	/* eslint-disable class-methods-use-this */
+	public reset() {
+		throw new MethodNotImplementedError();
+	}
+
+	/* eslint-disable class-methods-use-this */
+	public reconnect() {
+		throw new MethodNotImplementedError();
+	}
 }
+
+export { HttpProvider };
